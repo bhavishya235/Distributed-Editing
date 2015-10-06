@@ -1,3 +1,7 @@
+This is a peer-to-peer concurrent rich text editing platform using Chord DHT(Distributed Hash Table).
+
+Maintained 2 layer overlay network of chordal ring and k-ary tree to broadcast each message in O(logn) time. Extended Distributed Operational Transform algorithm to ensure the consistency of copies being concurrently updated in distributed nodes.
+
 Important files:
 
 1) main.py : Indexing server maintaining list of all open documents with just one IP which is required for new node to enter into the peer network handling a document.
