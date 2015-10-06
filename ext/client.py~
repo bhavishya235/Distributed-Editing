@@ -1,0 +1,121 @@
+import socket
+import sys
+import thread
+import time
+import Queue
+import json
+
+class Client:
+	def __init__(self,p101,p102,ip, hostip):
+		self.s = socket.socket()
+		self.server = socket.socket()
+		self.host = hostip
+		self.port = 5104
+		self.flagServer_connect = 0
+		self.flag_connect = 0
+
+		self.updates = Queue.Queue()
+		self.newIP = self.host
+		self.newPort = self.port
+
+		self.myIP = ip
+		self.myPortListen = p102
+		self.myPortSend = p101
+
+		self.buffsize = 1024
+		self.changeneighbour = -1
+
+		self.income = socket.socket(socket.AF_INET, socket.SOCK_STREAM,0)
+
+		self.income.bind((self.myIP, self.myPortListen))
+		self.income.listen(10)
+		
+		thread.start_new_thread(self.listenIndef,())
+
+	def listenIndef(self):
+		while True:
+			c, addr = self.income.accept()     
+			thread.start_new_thread(self.handler, (c,addr))
+
+	def handler(self,c,addr):
+		print 'Got connection from', addr[0], addr[1]
+
+		msg_received = c.recv(self.buffsize)
+		print "Message received > ",msg_received,"--till here"
+		if(msg_received == "Change Connection"):
+			c.send("JUNK")
+			self.newIp = c.recv(self.buffsize)
+			c.send("JUNK")
+			self.newPort = int(c.recv(self.buffsize))
+			print str(self.myPortListen) + "going to connect to " + str(self.newPort) 
+			if (self.flag_connect == 1):
+				self.s.send("Break")
+			self.makeNodeSocket()
+
+		else:
+			if msg_received != '':
+				while 1:
+					if(msg_received == "Break"):
+						break
+					
+					#parse msg
+					msgJson = json.loads(msg_received)
+					rcv_IP = msgJson[0]["ip"]
+					rcv_Port = msgJson[0]["port"]
+					#rcv_IP,rcv_Port,tempPos,tempMsg,tempSel = msg_received.split(":")
+					
+					if (rcv_IP!=self.myIP) or (rcv_Port!=str(self.myPortListen)):
+						self.s.send(msg_received)
+						#print "<"+self.myIP+">",":","<"+str(self.myPortListen)+">","<"+str(rcv_IP)+">",":","<"+str(rcv_Port)+">",self.myIP==rcv_IP,str(self.myPortListen)==rcv_Port
+						self.updates.put(msg_received)
+
+					msg_received = c.recv(self.buffsize)
+
+	def forwardMessage(self,fmsg):
+		print "sending::--",fmsg,"--::till here"
+		self.s.send(fmsg)
+
+	def makeServerConn(self):
+		try:
+			print str(self.myPortSend) + " connecting to server"
+			self.server = socket.socket()
+			self.server.bind(('0.0.0.0', self.myPortSend))
+			self.server.connect((self.host, self.port))
+			self.flagServer_connect = 1
+		except socket.error as socketerror:
+			self.flagServer_connect = 0
+			print("Error: ",socketerror)
+
+	def closeServerConn(self):
+		self.server.close()
+
+	def sendNewFileName(self,fileName):
+		self.makeServerConn()
+		msg = "New File:"+fileName+':'+str(self.myPortListen)
+		self.server.send(msg)
+		val = self.server.recv(self.buffsize)
+		self.closeServerConn()
+		return int(val)
+
+	def getFileName(self):
+		self.makeServerConn()
+		msg = "Get File:abra"+':'+str(self.myPortListen)
+		self.server.send(msg)
+		val = self.server.recv(self.buffsize)
+		self.closeServerConn()
+		return val.split('\n')
+
+	def setGroup(self, fileName):
+		self.makeServerConn()
+		msg = "Set Group:"+fileName+':'+str(self.myPortListen)
+		self.server.send(msg)
+
+	def makeNodeSocket(self):
+		try:
+			print str(self.myPortListen) + " connecting to " + str(self.newPort)
+			self.s = socket.socket()     
+			self.s.connect((self.newIP, self.newPort))
+			self.flag_connect = 1
+		except socket.error as socketerror:
+			self.flag_connect = 0
+			print("Error: ",socketerror)
